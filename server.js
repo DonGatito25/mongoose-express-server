@@ -9,14 +9,28 @@ const port = process.env.PORT || 3000;
 //
 app.use(express.json());
 //
+const GroceryItem = require("./models/GroceryItem");
+const Employee = require("./models/Employee");
+
+const modelMapping = {
+    GroceryInventory: GroceryItem,
+    Employees: Employee,
+};
+//
 const connections = {}
 const models = {}
 //
 const bankUserSchema = new mongoose.Schema({});
 //
 const getConnection = async (dbName) => {
-    if (connections != dbName) { 
-        connections[dbName] = await mongoose.createConnection(process.env.MONGO_URI, { dbName: dbName });
+    if (connections != dbName) {
+        connections[dbName] = await mongoose.createConnection(process.env.MONGO_URI, { dbName: dbName, autoIndex: false });
+        //
+        await new Promise((resolve, reject) => {
+            connections[dbName].once("open", resolve);
+            connections[dbName].once("error", reject);
+        });
+        //
         console.log(dbName);
     } else {
         console.log("Reusing existing connection DBName.")
@@ -32,14 +46,29 @@ const getModel = async (dbName, collectionName) => {
     if (!models[modelKey]) {
         const connection = await getConnection(dbName);
         //
-        const dynamicSchema = new mongoose.Schema({}, { strict: false });
-        models[modelKey] = connection.model(
-            collectionName,
-            dynamicSchema,
-            collectionName
-        );
-        //
-        console.log("Created new model for collection:", collectionName);
+        const Model = modelMapping[collectionName];
+        if (!Model) {
+            const dynamicSchema = new mongoose.Schema(
+                {},
+                { strict: false, autoIndex: false }
+            );
+            //
+            models[modelKey] = connection.model(
+                collectionName,
+                dynamicSchema,
+                collectionName
+            );
+            //
+            console.log(`Created dynamic model for collection: ${collectionName}`);
+        } else {
+            models[modelKey] = connection.model(
+                Model.modelName,
+                Model.schema,
+                collectionName
+            );
+            //
+            console.log("Created new model for collection:", collectionName);
+        }
     }
     //
     return models[modelKey];
@@ -47,18 +76,80 @@ const getModel = async (dbName, collectionName) => {
 //
 app.get('/find/:database/:collection', async (req, res) => {
     try {
+        // Extract the database and collection from request parameters
         const { database, collection } = req.params;
+        // Get the appropriate Mongoose model
         const Model = await getModel(database, collection);
+        // Retrieve all documents from the colllection
         const documents = await Model.find({});
-        console.log(`Query executed, document count is: ${document.length}`);
-        //
+        // Log the number of documents retrieved
+        console.log(`Query executed, document count is: ${documents.length}`);
+        // Send back the documents with a 200 status code
         res.status(200).json(documents);
     } catch (err) {
-        console.error("Error in GET route, " err)
-        //
+        // Log error to the console
+        console.error("Error in GET route ", err)
+        // Send back a 500 status code with the error message
         res.status(500)
     }
 })
+//
+app.post('/insert/:database/:collection', async (req, res) => {
+    try {
+        const { database, collection } = req.params;
+        const data = req.body
+        const Model = await getModel(database, collection);
+        const newDocument = new Model(data);
+        //
+        await newDocument.save();
+        //
+        console.log(`Query executed, document posted to collection ${collection}.`)
+        //
+        res.status(200).json({ message: "Document posted successfully.", document: newDocument })
+    } catch (err) {
+        console.error("Error in POST route ", err)
+        //
+        res.status(400).json({ error: err.message })
+    }
+})
+//
+app.put('/update/:database/:collection/:id', async (req, res) => {
+    try {
+        const { database, collection, id } = req.params;
+        const data = req.body;
+        const Model = await getModel(database, collection);
+        //
+        const updatedDocument = await Model.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+        //
+        if (!updatedDocument) {
+            return res.status(404).json({ message: "Document not found." });
+        };
+        //
+        console.log("Updated document successfully.");
+        //
+        res.status(200).json({ message: "Document updated successfully." })
+    } catch (err) {
+        console.error("Error in PUT route ", err);
+        //
+        res.status(400).json({ error: err.message })
+    }
+})
+//
+app.delete("/delete/:database/:collection/:id", async (req, res) => {
+    try {
+        const { database, collection, id } = req.params;
+        const data = req.body;
+        const Model = await getModel(database, collection);
+        //
+        const deletedDocument = await Model.findByIdAndDelete(id)
+        if (!deletedDocument) {
+            return res.status(404).json({ message: "Document not found."})
+        }
+        console.log("Document deleted successfully.")
+    } catch (err) {
+
+    }
+});
 //
 const startServer = async () => {
     try {
@@ -70,3 +161,5 @@ const startServer = async () => {
         process.exit();
     }
 }
+
+startServer()
