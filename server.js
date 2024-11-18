@@ -105,7 +105,7 @@ app.post('/insert/:database/:collection', async (req, res) => {
         //
         console.log(`Query executed, document posted to collection ${collection}.`)
         //
-        res.status(200).json({ message: "Document posted successfully.", document: newDocument })
+        res.status(201).json({ message: "Document posted successfully.", document: newDocument })
     } catch (err) {
         console.error("Error in POST route ", err)
         //
@@ -148,6 +148,30 @@ app.delete("/delete/:database/:collection/:id", async (req, res) => {
         console.log("Document deleted successfully.")
     } catch (err) {
 
+    }
+});
+//
+app.delete('/delete-collection/:database/:collection', async (req, res) => {
+    try {
+        const { database, collection } = req.params;
+        const connection = await getConnection(database); // Establish or retrieve the connection
+        // Check if the collection exists
+        const collections = await connection.db.listCollections({ name: collection }).toArray();
+        const collectionExists = collections.length > 0;
+
+        if (!collectionExists) {
+            return res.status(404).json({ error: `Collection '${collection}' does not exist in database '${database}'.` });
+        }
+        // Drop the collection
+        await connection.db.dropCollection(collection);
+        console.log(`Collection '${collection}' deleted from database '${database}'.`);
+        // Remove all models associated with this collection
+        const modelKey = `${database}-${collection}`;
+        delete models[modelKey];
+        res.status(200).json({ message: `Collection '${collection}' has been successfully deleted from database '${database}'.` });
+    } catch (err) {
+        console.error('Error deleting collection:', err);
+        res.status(500).json({ error: 'An error occurred while deleting the collection.' });
     }
 });
 //

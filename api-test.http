@@ -10,4 +10,23 @@ Content-Type: application/json
 ###
 DELETE {{domain}}:{{port}}/delete/{{database}}/{{collection}}
 Content-Type: application/json
+
 ###
+DELETE {{domain}}:{{port}}/delete-collection/{{database}}/{{collection}}
+Content-Type: application/json
+
+###
+@delete-id = 673bc7a6ea2902cc5e376462
+DELETE {{domain}}:{{port}}/delete/{{database}}/{{collection}}/{{delete-id}}
+Content-Type: application/json
+
+###
+POST {{domain}}:{{port}}/insert/{{database}}/{{collection}}
+Content-Type: application/json
+
+{
+    "item": "steak",
+    "food_group": "protains",
+    "test": "This is a test.",
+    "price_in_usd": 27
+}
